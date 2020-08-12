@@ -1,4 +1,85 @@
 ---
+# Cassandra DB Service #
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-cassandra
+spec:
+  type: ClusterIP
+  ports:
+    - name: thrift
+      port: 9160
+      targetPort: thrift
+    - name: cql
+      port: 9042
+  selector:
+    app: database
+    component: cassandra
+
+---
+# Cassandra External Service #
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-cassandra-external
+spec:
+  type: NodePort
+  ports:
+    - name: cql
+      port: 9042
+      nodePort: 31243
+  selector:
+    app: database
+    component: cassandra
+
+---
+# Cassandra Route #
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: database-cassandra-cql
+spec:
+  selector:
+      matchLabels:
+        component: cassandra
+        app: database
+  port:
+    targetPort: cql
+  to:
+    kind: Service
+    name: database-cassandra-external
+    weight: 100
+  wildcardPolicy: None
+
+---
+# Cassandra Configuration #
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cassandra-config
+spec:
+  selector:
+      matchLabels:
+        component: cassandra
+        app: database
+data:
+  cassandra.yaml: |-
+    cluster_name: 'Camel Kafka Connector Test Cluster'
+    commitlog_sync: periodic
+    commitlog_sync_period_in_ms: 10000
+    listen_address: eth0
+    partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+    endpoint_snitch: SimpleSnitch
+    start_native_transport: true
+    native_transport_port: 9042
+    dynamic_snitch_badness_threshold: 0.1
+    request_scheduler: org.apache.cassandra.scheduler.NoScheduler
+    seed_provider:
+      - class_name: org.apache.cassandra.locator.SimpleSeedProvider
+        parameters:
+          - seeds: "127.0.0.1"
+
+---
 # Cassandra DB Deployment #
 apiVersion: apps/v1
 kind: Deployment
