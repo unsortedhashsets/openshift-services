@@ -1,0 +1,82 @@
+---
+# Cassandra DB Deployment #
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-cassandra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: cassandra
+      app: database
+  limits:
+    - type: "Pod"
+      max:
+        cpu: "2"
+        memory: "2Gi"
+  template:
+    metadata:
+      labels:
+        component: cassandra
+        app: database
+    spec:
+      initContainers:
+          - name: touchconfig
+            image: registry.access.redhat.com/ubi7/ubi-minimal
+            command:
+              - /bin/bash
+              - -c
+              - cp /config/* /etc/cassandra/ && mkdir /etc/cassandra/triggers
+            volumeMounts:
+              - name: config
+                mountPath: /etc/cassandra/
+              - name: cassandra-config
+                mountPath: /config
+            volumes:
+            - name: config
+              emptyDir: {}
+            - name: cassandra-config
+              configMap:
+                name: cassandra-config
+      containers:
+        - name: cassandra
+          image: docker.io/cassandra:3.11
+          env:
+            - name: JVM_ON_OUT_OF_MEMORY_ERROR_OPT
+              value: -XX:+CrashOnOutOfMemoryError
+            - name: JVM_OPTS
+              value: -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Dcassandra.jmx.local.port=9010
+          args: ["-R"]
+          livenessProbe:
+            tcpSocket:
+              port: 9042
+            initialDelaySeconds: 45
+            periodSeconds: 30
+          ports:
+            - name: cql
+              containerPort: 9042
+            - name: thrift
+              containerPort: 9160
+          volumeMounts:
+            - mountPath: /etc/cassandra
+              name: config
+            - mountPath: /var/lib/cassandra/
+              name: data
+            - mountPath: /config
+              name: cassandra-config
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 2000Mi
+            limits:
+              cpu: 4000m
+              memory: 4000Mi
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: cassandra-config
+          configMap:
+            name: cassandra-config
